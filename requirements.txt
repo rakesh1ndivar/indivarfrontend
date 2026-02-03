@@ -1,0 +1,13 @@
+flask
+flask-cors
+flask-limiter
+openai
+databricks-sql-connector
+redis
+msal
+requests
+PyJWT
+gunicorn
+python-dotenv
+azure-data-tables
+azure-identity
