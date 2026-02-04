@@ -679,6 +679,10 @@ def call_openai_with_tools(messages: List[Dict], agent_type: str = "analytics"):
 @app.route('/api/auth/login', methods=['GET'])
 def login():
     """Initiate Azure AD OAuth flow"""
+    return jsonify({
+        "auth_url": "https://github.com/Moataz-Elmesmary/Data-Science-Roadmap"
+    })
+    
     try:
         msal_app = get_msal_app()
         
@@ -1058,4 +1062,5 @@ if __name__ == '__main__':
     print(f"Cache enabled: {CACHE_ENABLED}")
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     app.run(debug=True, host='0.0.0.0', port=5000)
+
     
