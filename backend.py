@@ -20,13 +20,12 @@ from azure.data.tables import TableServiceClient
 from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
 from dotenv import load_dotenv
 
-#DEMO_MODE = True
+DEMO_MODE = False
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
-load_dotenv()
 
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-change-in-production')
+app.secret_key = os.getenv('FLASK_SECRET_KEY')
 
 # Configuration
 # Azure OpenAI Configuration (Enterprise)
@@ -679,10 +678,6 @@ def call_openai_with_tools(messages: List[Dict], agent_type: str = "analytics"):
 @app.route('/api/auth/login', methods=['GET'])
 def login():
     """Initiate Azure AD OAuth flow"""
-    return jsonify({
-        "auth_url": "https://github.com/Moataz-Elmesmary/Data-Science-Roadmap"
-    })
-    
     try:
         msal_app = get_msal_app()
         
@@ -1062,5 +1057,4 @@ if __name__ == '__main__':
     print(f"Cache enabled: {CACHE_ENABLED}")
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     app.run(debug=True, host='0.0.0.0', port=5000)
-
     
