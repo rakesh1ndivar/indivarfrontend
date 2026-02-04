@@ -24,73 +24,45 @@ from dotenv import load_dotenv
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
-load_dotenv()
+#load_dotenv()
 
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-change-in-production')
+app.secret_key = "demo-flask-secret-key"
 
-# Configuration
-# Azure OpenAI Configuration (Enterprise)
-AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT')
-AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY')
-AZURE_OPENAI_DEPLOYMENT = os.getenv('AZURE_OPENAI_DEPLOYMENT', 'gpt-4-turbo')
-AZURE_OPENAI_API_VERSION = os.getenv('AZURE_OPENAI_API_VERSION', '2024-02-15-preview')
+# ---------- Azure OpenAI (FAKE / DISABLED) ----------
+AZURE_OPENAI_ENDPOINT = "https://fake-openai-endpoint.openai.azure.com/"
+AZURE_OPENAI_API_KEY = "fake-openai-key"
+AZURE_OPENAI_DEPLOYMENT = "gpt-4-demo"
+AZURE_OPENAI_API_VERSION = "2024-02-15-preview"
 
-# Service Principal for Azure OpenAI (if using AAD authentication instead of API key)
-AZURE_OPENAI_USE_AAD = os.getenv('AZURE_OPENAI_USE_AAD', 'false').lower() == 'true'
-AZURE_SP_TENANT_ID = os.getenv('AZURE_SP_TENANT_ID')
-AZURE_SP_CLIENT_ID = os.getenv('AZURE_SP_CLIENT_ID')
-AZURE_SP_CLIENT_SECRET = os.getenv('AZURE_SP_CLIENT_SECRET')
+AZURE_OPENAI_USE_AAD = False
+AZURE_SP_TENANT_ID = "fake-tenant"
+AZURE_SP_CLIENT_ID = "fake-client"
+AZURE_SP_CLIENT_SECRET = "fake-secret"
 
-# Databricks
-DATABRICKS_SERVER_HOSTNAME = os.getenv('DATABRICKS_SERVER_HOSTNAME')
-DATABRICKS_HTTP_PATH = os.getenv('DATABRICKS_HTTP_PATH')
-DATABRICKS_ACCESS_TOKEN = os.getenv('DATABRICKS_ACCESS_TOKEN')
+# ---------- Databricks (DISABLED IN DEMO) ----------
+DATABRICKS_SERVER_HOSTNAME = "fake.databricks.azure.com"
+DATABRICKS_HTTP_PATH = "/sql/1.0/warehouses/fake"
+DATABRICKS_ACCESS_TOKEN = "fake-databricks-token"
 
-# JWT
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-this')
+# ---------- JWT ----------
+JWT_SECRET_KEY = "demo-jwt-secret"
 
-# Azure Table Storage for caching
-AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
-CACHE_TABLE_NAME = 'querycache'
-RATE_LIMIT_TABLE_NAME = 'ratelimits'
+# ---------- Azure Table Storage (DISABLED) ----------
+AZURE_STORAGE_CONNECTION_STRING = None
+CACHE_TABLE_NAME = "querycache"
+RATE_LIMIT_TABLE_NAME = "ratelimits"
 
-# Azure AD Configuration (for user authentication)
-AZURE_AD_TENANT_ID = os.getenv('AZURE_AD_TENANT_ID')
-AZURE_AD_CLIENT_ID = os.getenv('AZURE_AD_CLIENT_ID')
-AZURE_AD_CLIENT_SECRET = os.getenv('AZURE_AD_CLIENT_SECRET')
-AZURE_AD_REDIRECT_URI = os.getenv('AZURE_AD_REDIRECT_URI', 'http://localhost:5000/api/auth/callback')
-AZURE_AD_AUTHORITY = f"https://login.microsoftonline.com/{AZURE_AD_TENANT_ID}"
+# ---------- Azure AD Auth (DISABLED) ----------
+AZURE_AD_TENANT_ID = "fake-tenant"
+AZURE_AD_CLIENT_ID = "fake-client"
+AZURE_AD_CLIENT_SECRET = "fake-secret"
+AZURE_AD_REDIRECT_URI = "http://localhost:5000/api/auth/callback"
+AZURE_AD_AUTHORITY = "https://login.microsoftonline.com/fake-tenant"
 
-# Azure AD Group to Role Mapping
 AD_GROUP_ROLE_MAPPING = {
-    os.getenv('AD_GROUP_ADMIN_ID'): 'admin',
-    os.getenv('AD_GROUP_ANALYST_ID'): 'analyst',
-    os.getenv('AD_GROUP_VIEWER_ID'): 'viewer',
-}
-
-# Role-based permissions
-ROLE_PERMISSIONS = {
-    'admin': {
-        'can_clear_cache': True,
-        'can_view_all_data': True,
-        'can_modify_agents': True,
-        'can_export_data': True,
-        'max_queries_per_day': 1000
-    },
-    'analyst': {
-        'can_clear_cache': False,
-        'can_view_all_data': True,
-        'can_modify_agents': True,
-        'can_export_data': True,
-        'max_queries_per_day': 500
-    },
-    'viewer': {
-        'can_clear_cache': False,
-        'can_view_all_data': False,
-        'can_modify_agents': False,
-        'can_export_data': False,
-        'max_queries_per_day': 100
-    }
+    "fake-admin-group": "admin",
+    "fake-analyst-group": "analyst",
+    "fake-viewer-group": "viewer",
 }
 
 # Initialize Azure Table Storage for caching
