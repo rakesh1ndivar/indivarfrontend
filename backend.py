@@ -57,7 +57,7 @@ RATE_LIMIT_TABLE_NAME = 'ratelimits'
 AZURE_AD_TENANT_ID = os.getenv('AZURE_AD_TENANT_ID')
 AZURE_AD_CLIENT_ID = os.getenv('AZURE_AD_CLIENT_ID')
 AZURE_AD_CLIENT_SECRET = os.getenv('AZURE_AD_CLIENT_SECRET')
-AZURE_AD_REDIRECT_URI = os.getenv('AZURE_AD_REDIRECT_URI', 'http://localhost:5000/api/auth/callback')
+AZURE_AD_REDIRECT_URI = os.getenv('AZURE_AD_REDIRECT_URI', '/api/auth/callback')
 AZURE_AD_AUTHORITY = f"https://login.microsoftonline.com/{AZURE_AD_TENANT_ID}"
 
 # Azure AD Group to Role Mapping
@@ -136,7 +136,7 @@ except Exception as e:
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["20000 per day", "50 per hour"],
     storage_uri="memory://"
 )
 
@@ -742,7 +742,7 @@ def auth_callback():
             algorithm="HS256"
         )
         
-        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        frontend_url = os.getenv('FRONTEND_URL', '')
         return redirect(f"{frontend_url}/auth/callback?token={app_token}")
         
     except Exception as e:
@@ -1058,3 +1058,4 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     app.run(debug=True, host='0.0.0.0', port=5000)
     
+
