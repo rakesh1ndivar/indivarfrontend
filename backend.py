@@ -744,7 +744,7 @@ def auth_callback():
             algorithm="HS256"
         )
         
-        frontend_url = os.getenv('FRONTEND_URL', '')
+        frontend_url = os.getenv('FRONTEND_URL', BASE_API_URL)
         return redirect(f"{frontend_url}/auth/callback?token={app_token}")
         
     except Exception as e:
@@ -1058,7 +1058,8 @@ if __name__ == '__main__':
     print(f"Databricks host: {DATABRICKS_SERVER_HOSTNAME}")
     print(f"Cache enabled: {CACHE_ENABLED}")
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
