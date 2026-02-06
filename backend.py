@@ -751,6 +751,10 @@ def auth_callback():
         print(f"Auth callback error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route("/auth/callback")
+def auth_callback_frontend():
+    return send_from_directory("dist", "index.html")
+
 @app.route('/api/auth/verify', methods=['GET'])
 @token_required
 def verify_token():
@@ -1060,6 +1064,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
