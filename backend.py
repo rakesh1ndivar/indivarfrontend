@@ -1062,8 +1062,9 @@ if __name__ == '__main__':
     print(f"Databricks host: {DATABRICKS_SERVER_HOSTNAME}")
     print(f"Cache enabled: {CACHE_ENABLED}")
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
-    app.run(debug=True, host='0.0.0.0', port=8000)
+    #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
