@@ -33,8 +33,8 @@ BASE_API_URL = os.getenv('VITE_API_URL')
 # Azure OpenAI Configuration (Enterprise)
 AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT')
 AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY')
-AZURE_OPENAI_DEPLOYMENT = os.getenv('AZURE_OPENAI_DEPLOYMENT', 'gpt-4-turbo')
-AZURE_OPENAI_API_VERSION = os.getenv('AZURE_OPENAI_API_VERSION', '2024-02-15-preview')
+AZURE_OPENAI_DEPLOYMENT = os.getenv('AZURE_OPENAI_DEPLOYMENT')
+AZURE_OPENAI_API_VERSION = os.getenv('AZURE_OPENAI_API_VERSION')
 
 # Service Principal for Azure OpenAI (if using AAD authentication instead of API key)
 AZURE_OPENAI_USE_AAD = os.getenv('AZURE_OPENAI_USE_AAD', 'false').lower() == 'true'
@@ -48,7 +48,7 @@ DATABRICKS_HTTP_PATH = os.getenv('DATABRICKS_HTTP_PATH')
 DATABRICKS_ACCESS_TOKEN = os.getenv('DATABRICKS_ACCESS_TOKEN')
 
 # JWT
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-this')
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
 
 # Azure Table Storage for caching
 AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
@@ -1064,6 +1064,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
