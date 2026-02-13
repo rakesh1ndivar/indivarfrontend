@@ -5,6 +5,9 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from openai import AzureOpenAI
 from databricks import sql
+import httpx
+import time
+import threading
 import os
 import json
 import re
@@ -151,56 +154,80 @@ def get_databricks_connection():
         access_token=os.getenv("DATABRICKS_ACCESS_TOKEN"),
     )
 
-# Initialize Azure OpenAI Client
+# =========================
+# UHG OAuth2 Token Manager
+# =========================
+class UHGTokenManager:
+    """Auto-refreshing token manager for UHG OAuth2 endpoint"""
+
+    def __init__(self):
+        self.auth_url = "https://api.uhg.com/oauth2/token"
+        # self.auth_url = "https://api-stg.uhg.com/oauth2/token"  # Non-prod
+        self.scope = "https://api.uhg.com/.default"
+        self.client_id = os.getenv("AZURE_SP_CLIENT_ID")
+        self.client_secret = os.getenv("AZURE_SP_CLIENT_SECRET")
+
+        self._token = None
+        self._expires_at = 0
+        self._lock = threading.Lock()
+
+    def get_token(self):
+        """Return valid token (refresh if <2min remaining)"""
+        with self._lock:
+            if time.time() > self._expires_at - 120:
+                self._refresh_token()
+            return self._token
+
+    def _refresh_token(self):
+        """Fetch new OAuth2 token"""
+        with httpx.Client() as client:
+            resp = client.post(
+                self.auth_url,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "grant_type": "client_credentials",
+                    "scope": self.scope,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            self._token = data["access_token"]
+            expires_in = data.get("expires_in", 3000)  # fallback ~50min
+            self._expires_at = time.time() + expires_in
+
+            print(f"UHG token refreshed, expires in {expires_in}s")
+
+
+# =========================
+# Azure OpenAI Client
+# =========================
 def get_azure_openai_client():
-    """Get Azure OpenAI client with appropriate authentication"""
-    
+    """Create Azure OpenAI client using UHG OAuth OR API key"""
+
     if AZURE_OPENAI_USE_AAD:
-        # Use Service Principal authentication
-        print("Using Azure AD Service Principal authentication for OpenAI")
-        
-        # Get access token using MSAL
-        authority = f"https://login.microsoftonline.com/{AZURE_SP_TENANT_ID}"
-        app_msal = msal.ConfidentialClientApplication(
-            AZURE_SP_CLIENT_ID,
-            authority=authority,
-            client_credential=AZURE_SP_CLIENT_SECRET,
+        print("Using UHG OAuth2 Service Principal authentication")
+
+        token_manager = UHGTokenManager()
+
+        client = AzureOpenAI(
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            azure_ad_token_provider=token_manager.get_token,
+            api_version=AZURE_OPENAI_API_VERSION,
         )
-        
-        # Acquire token for Cognitive Services
-        scopes = ["https://cognitiveservices.azure.com/.default"]
-        result = app_msal.acquire_token_for_client(scopes=scopes)
-        
-        if "access_token" in result:
-            # Create client with Azure AD token
-            from azure.identity import ClientSecretCredential
-            from azure.core.credentials import AzureKeyCredential
-            
-            credential = ClientSecretCredential(
-                tenant_id=AZURE_SP_TENANT_ID,
-                client_id=AZURE_SP_CLIENT_ID,
-                client_secret=AZURE_SP_CLIENT_SECRET
-            )
-            
-            # Get token
-            token = credential.get_token("https://cognitiveservices.azure.com/.default")
-            
-            client = AzureOpenAI(
-                azure_endpoint=AZURE_OPENAI_ENDPOINT,
-                api_key=token.token,  # Use token as API key
-                api_version=AZURE_OPENAI_API_VERSION
-            )
-        else:
-            raise Exception(f"Failed to acquire token: {result.get('error_description')}")
+
     else:
-        # Use API Key authentication
         print("Using API Key authentication for OpenAI")
+
         client = AzureOpenAI(
             azure_endpoint=AZURE_OPENAI_ENDPOINT,
             api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION
+            api_version=AZURE_OPENAI_API_VERSION,
         )
-    
+
     return client
 
 # Initialize client at startup
@@ -1064,6 +1091,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
