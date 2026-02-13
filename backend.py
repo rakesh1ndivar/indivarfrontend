@@ -1072,7 +1072,7 @@ if __name__ == '__main__':
     # Check if using AAD or API Key for OpenAI
     if AZURE_OPENAI_USE_AAD:
         required_vars.extend([
-            'AZURE_SP_TENANT_ID',
+            #'AZURE_SP_TENANT_ID',
             'AZURE_SP_CLIENT_ID',
             'AZURE_SP_CLIENT_SECRET'
         ])
@@ -1094,6 +1094,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
