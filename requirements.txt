@@ -11,3 +11,4 @@ gunicorn
 python-dotenv
 azure-data-tables
 azure-identity
+httpx
