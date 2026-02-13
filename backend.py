@@ -233,7 +233,7 @@ def get_user_groups(access_token):
         
         if response.status_code == 200:
             groups = response.json().get('value', [])
-            return [group['id'] for group in groups]
+            return [group['displayName'] for group in groups]
         else:
             print(f"Failed to get groups: {response.status_code}")
             return []
@@ -1064,6 +1064,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
