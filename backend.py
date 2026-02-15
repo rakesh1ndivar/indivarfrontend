@@ -819,7 +819,7 @@ def logout():
     })
 
 @app.route('/api/chat', methods=['POST'])
-#@token_required
+@token_required
 @limiter.limit("30 per minute")
 def chat():
     """Main endpoint for chat interactions"""
@@ -1108,6 +1108,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
