@@ -253,23 +253,37 @@ def get_msal_app():
         client_credential=AZURE_AD_CLIENT_SECRET,
     )
 
-def get_user_groups(access_token):
-    """Get user's Azure AD group memberships"""
-    try:
-        graph_endpoint = 'https://graph.microsoft.com/v1.0/me/memberOf'
-        headers = {'Authorization': f'Bearer {access_token}'}
-        
-        response = requests.get(graph_endpoint, headers=headers)
-        
-        if response.status_code == 200:
-            groups = response.json().get('value', [])
-            return [group['displayName'] for group in groups]
-        else:
-            print(f"Failed to get groups: {response.status_code}")
-            return []
-    except Exception as e:
-        print(f"Error getting user groups: {e}")
-        return []
+
+  
+def get_user_groups(access_token):  
+    """Get all Azure AD group memberships (direct + via nested groups) for the signed-in user."""  
+    url = ("https://graph.microsoft.com/v1.0/"  
+           "me/transitiveMemberOf/microsoft.graph.group"  
+           "?$select=id,displayName&$top=999")  
+    headers = {"Authorization": f"Bearer {access_token}"}  
+  
+    groups = []  
+    seen = set()  
+  
+    try:  
+        while url:  
+            resp = requests.get(url, headers=headers, timeout=30)  
+            if resp.status_code != 200:  
+                print(f"Failed to get groups: {resp.status_code} {resp.text}")  
+                return groups  
+  
+            data = resp.json()  
+            for g in data.get("value", []):  
+                name = g.get("displayName")  
+                if name and name not in seen:  
+                    seen.add(name)  
+                    groups.append(name)  
+  
+            url = data.get("@odata.nextLink")  # follow pagination  
+    except Exception as e:  
+        print(f"Error getting user groups: {e}")  
+  
+    return groups
 
 def determine_user_role(group_ids):
     """Determine user role based on AD group membership"""
@@ -1094,6 +1108,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
