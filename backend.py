@@ -23,7 +23,7 @@ from azure.data.tables import TableServiceClient
 from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
 from dotenv import load_dotenv
 
-DEMO_MODE = False
+DEMO_MODE = True
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
@@ -1094,6 +1094,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
