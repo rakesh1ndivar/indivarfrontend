@@ -645,8 +645,8 @@ def execute_databricks_query(sql_query: str, max_rows: int = 1000, use_cache: bo
         connection = get_databricks_connection()
         cursor = connection.cursor()
         
-        if 'LIMIT' not in sql_upper:
-            sql_query = f"{sql_query} LIMIT {max_rows}"
+        #if 'LIMIT' not in sql_upper:
+        #    sql_query = f"{sql_query} LIMIT {max_rows}"
         
         cursor.execute(sql_query)
         columns = [desc[0] for desc in cursor.description]
@@ -1108,6 +1108,7 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
+
 
 
 
