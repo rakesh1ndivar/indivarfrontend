@@ -58,6 +58,14 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
 AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
 CACHE_TABLE_NAME = 'querycache'
 RATE_LIMIT_TABLE_NAME = 'ratelimits'
+AZURE_TABLES_CONNECTION_STRING = os.getenv("AZURE_TABLES_CONNECTION_STRING")
+AZURE_TABLE_SESSIONS_TABLE = os.getenv("AZURE_TABLE_SESSIONS_TABLE", "agentsessions")
+AZURE_TABLE_MESSAGES_TABLE = os.getenv("AZURE_TABLE_MESSAGES_TABLE", "agentmessages")
+
+tables_enabled = False
+table_service = None
+sessions_table = None
+messages_table = None
 
 # Azure AD Configuration (for user authentication)
 AZURE_AD_TENANT_ID = os.getenv('AZURE_AD_TENANT_ID')
@@ -99,45 +107,33 @@ ROLE_PERMISSIONS = {
 }
 
 # Initialize Azure Table Storage for caching
-table_service = None
+
 cache_table = None
 rate_limit_table = None
 CACHE_ENABLED = False
 
 try:
-    if AZURE_STORAGE_CONNECTION_STRING:
-        table_service = TableServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-        
-        # Create cache table if not exists
-        try:
-            table_service.create_table(CACHE_TABLE_NAME)
-            print(f"Created table: {CACHE_TABLE_NAME}")
-        except ResourceExistsError:
-            print(f"Table already exists: {CACHE_TABLE_NAME}")
-        except Exception as e:
-            print(f"Error creating cache table: {e}")
-        
-        # Create rate limit table if not exists
-        try:
-            table_service.create_table(RATE_LIMIT_TABLE_NAME)
-            print(f"Created table: {RATE_LIMIT_TABLE_NAME}")
-        except ResourceExistsError:
-            print(f"Table already exists: {RATE_LIMIT_TABLE_NAME}")
-        except Exception as e:
-            print(f"Error creating rate limit table: {e}")
-        
-        cache_table = table_service.get_table_client(CACHE_TABLE_NAME)
-        rate_limit_table = table_service.get_table_client(RATE_LIMIT_TABLE_NAME)
-        
-        CACHE_ENABLED = True
-        print("Azure Table Storage cache connected successfully")
-    else:
-        print("No Azure Storage connection string provided. Caching disabled.")
-        CACHE_ENABLED = False
-except Exception as e:
-    print(f"Azure Table Storage connection failed: {e}. Caching disabled.")
-    CACHE_ENABLED = False
+    if AZURE_TABLES_CONNECTION_STRING:
+        table_service = TableServiceClient.from_connection_string(
+            AZURE_TABLES_CONNECTION_STRING
+        )
 
+        for name in [AZURE_TABLE_SESSIONS_TABLE, AZURE_TABLE_MESSAGES_TABLE]:
+            try:
+                table_service.create_table(name)
+            except ResourceExistsError:
+                pass
+
+        sessions_table = table_service.get_table_client(AZURE_TABLE_SESSIONS_TABLE)
+        messages_table = table_service.get_table_client(AZURE_TABLE_MESSAGES_TABLE)
+
+        tables_enabled = True
+        print("Azure Tables connected (sessions + messages)")
+    else:
+        print("Azure Tables disabled (no connection string)")
+except Exception as e:
+    print(f"Azure Tables init failed: {e}")
+    tables_enabled = False
 # Rate limiting - using in-memory for simplicity
 limiter = Limiter(
     app=app,
@@ -822,110 +818,81 @@ def logout():
 @token_required
 @limiter.limit("30 per minute")
 def chat():
-    """Main endpoint for chat interactions"""
     try:
-        user_role = g.current_user.get('role', 'viewer')
-        max_queries = ROLE_PERMISSIONS[user_role]['max_queries_per_day']
-        
-        user_id = g.current_user.get('email')
-        date_str = datetime.utcnow().date().isoformat()
-        
-        # Check daily query limit using Table Storage
-        current_count = get_query_count(user_id, date_str)
-        if current_count >= max_queries:
-            return jsonify({
-                "error": f"Daily query limit ({max_queries}) reached for {user_role} role"
-            }), 429
-        
+        if not tables_enabled:
+            return jsonify({"error": "Azure Tables not enabled"}), 500
+
         data = request.json
-        user_message = data.get('message', '')
-        conversation_history = data.get('history', [])
-        agent_type = data.get('agent_type', 'analytics')
-        
+        user_message = data.get("message")
+        agent = data.get("agent", "analytics")
+        session_id = data.get("session_id")
+
         if not user_message:
             return jsonify({"error": "Message is required"}), 400
-        
-        messages = []
-        for msg in conversation_history[-10:]:
-            messages.append({
-                "role": msg.get('type', 'user') if msg.get('type') == 'user' else 'assistant',
-                "content": msg.get('content', '')
+
+        user_email = g.current_user["email"]
+
+        # 🔹 Create session if needed
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            sessions_table.upsert_entity({
+                "PartitionKey": user_email,
+                "RowKey": session_id,
+                "agent": agent,
+                "created_at": datetime.utcnow().isoformat(),
+                "last_active": datetime.utcnow().isoformat()
             })
-        
-        messages.append({"role": "user", "content": user_message})
-        
-        response = call_openai_with_tools(messages, agent_type)
-        assistant_message = response.choices[0].message
-        
-        tool_calls = assistant_message.tool_calls
-        
-        if tool_calls:
-            messages.append({
-                "role": "assistant",
-                "content": assistant_message.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments
-                        }
-                    } for tc in tool_calls
-                ]
+
+        # 🔹 Load history from Azure Tables
+        history = []
+        for e in messages_table.query_entities(f"PartitionKey eq '{session_id}'"):
+            history.append({
+                "role": e["role"],
+                "content": e["content"]
             })
-            
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-                
-                if function_name == "execute_databricks_query":
-                    sql_query = function_args.get("sql_query")
-                    reasoning = function_args.get("reasoning")
-                    
-                    print(f"User: {g.current_user['email']} (Role: {user_role})")
-                    print(f"Executing query: {sql_query}")
-                    print(f"Reasoning: {reasoning}")
-                    
-                    query_result = execute_databricks_query(sql_query, use_cache=True)
-                    
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": function_name,
-                        "content": json.dumps(query_result)
-                    })
-            
-            final_response = client.chat.completions.create(
-                model=AZURE_OPENAI_DEPLOYMENT,
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-                temperature=0.1
-            )
-            
-            final_message = final_response.choices[0].message.content
-        else:
-            final_message = assistant_message.content
-        
-        # Increment query count
-        increment_query_count(user_id, date_str)
-        
-        visualization = parse_visualization_from_text(final_message)
-        
+
+        history = history[-20:]
+        messages = history + [{"role": "user", "content": user_message}]
+
+        # 🔹 Call OpenAI
+        response = client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=messages,
+            temperature=0.1
+        )
+
+        answer = response.choices[0].message.content
+        now = datetime.utcnow().isoformat()
+
+        # 🔹 Persist messages
+        messages_table.create_entity({
+            "PartitionKey": session_id,
+            "RowKey": f"{time.time()}_{uuid.uuid4().hex}",
+            "role": "user",
+            "content": user_message,
+            "agent": agent,
+            "timestamp": now
+        })
+
+        messages_table.create_entity({
+            "PartitionKey": session_id,
+            "RowKey": f"{time.time()}_{uuid.uuid4().hex}",
+            "role": "assistant",
+            "content": answer,
+            "agent": agent,
+            "timestamp": now
+        })
+
         return jsonify({
             "success": True,
-            "response": final_message,
-            "visualization": visualization,
-            "timestamp": datetime.utcnow().isoformat(),
-            "user": g.current_user['email'],
-            "role": user_role
+            "response": answer,
+            "session_id": session_id,
+            "timestamp": now
         })
-        
+
     except Exception as e:
-        print(f"Error in chat endpoint: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        print(f"Chat error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 def parse_visualization_from_text(text: str) -> Dict | None:
     """Extract JSON visualization data from markdown code blocks"""
@@ -1108,20 +1075,3 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
