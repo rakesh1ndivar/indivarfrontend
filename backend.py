@@ -823,7 +823,9 @@ def logout():
 @token_required
 @limiter.limit("30 per minute")
 def chat():
+    """Main endpoint for chat interactions"""
     try:
+        # Code for using Azure Tables
         if not tables_enabled:
             return jsonify({"error": "Azure Tables not enabled"}), 500
 
@@ -837,6 +839,15 @@ def chat():
 
         user_email = g.current_user["email"]
 
+        #Code for getting roles and max_queries
+
+        user_role = g.current_user.get('role', 'viewer')
+        max_queries = ROLE_PERMISSIONS[user_role]['max_queries_per_day']
+        
+        user_id = g.current_user.get('email')
+        date_str = datetime.utcnow().date().isoformat()
+        
+
         # 🔹 Create session if needed
         if not session_id:
             session_id = str(uuid.uuid4())
@@ -847,7 +858,15 @@ def chat():
                 "created_at": datetime.utcnow().isoformat(),
                 "last_active": datetime.utcnow().isoformat()
             })
-
+        
+        
+        # Check daily query limit using Table Storage
+        current_count = get_query_count(user_id, date_str)
+        if current_count >= max_queries:
+            return jsonify({
+                "error": f"Daily query limit ({max_queries}) reached for {user_role} role"
+            }), 429
+        
         # 🔹 Load history from Azure Tables
         history = []
         for e in messages_table.query_entities(f"PartitionKey eq '{session_id}'"):
@@ -857,17 +876,66 @@ def chat():
             })
 
         history = history[-20:]
-        messages = history + [{"role": "user", "content": user_message}]
-
-        # 🔹 Call OpenAI
-        response = client.chat.completions.create(
-            model=AZURE_OPENAI_DEPLOYMENT,
-            messages=messages,
-            temperature=0.1
-        )
-
-        answer = response.choices[0].message.content
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+        messages.append({"role": "user", "content": user_message})
+    
+        response = call_openai_with_tools(messages, agent)
+        assistant_message = response.choices[0].message
         now = datetime.utcnow().isoformat()
+        
+        tool_calls = assistant_message.tool_calls
+        
+        if tool_calls:
+            messages.append({
+                "role": "assistant",
+                "content": assistant_message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    } for tc in tool_calls
+                ]
+            })
+            
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+                
+                if function_name == "execute_databricks_query":
+                    sql_query = function_args.get("sql_query")
+                    reasoning = function_args.get("reasoning")
+                    
+                    print(f"User: {g.current_user['email']} (Role: {user_role})")
+                    print(f"Executing query: {sql_query}")
+                    print(f"Reasoning: {reasoning}")
+                    
+                    query_result = execute_databricks_query(sql_query, use_cache=True)
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": function_name,
+                        "content": json.dumps(query_result)
+                    })
+            
+            final_response = client.chat.completions.create(
+                model=AZURE_OPENAI_DEPLOYMENT,
+                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                temperature=0.1
+            )
+            
+            final_message = final_response.choices[0].message.content
+        else:
+            final_message = assistant_message.content
+        
+        # Increment query count
+        increment_query_count(user_id, date_str)
+        
+        visualization = parse_visualization_from_text(final_message)
 
         # 🔹 Persist messages
         messages_table.create_entity({
@@ -883,17 +951,27 @@ def chat():
             "PartitionKey": session_id,
             "RowKey": f"{time.time()}_{uuid.uuid4().hex}",
             "role": "assistant",
-            "content": answer,
+            "content": final_message,
             "agent": agent,
             "timestamp": now
         })
-
+        
         return jsonify({
             "success": True,
-            "response": answer,
-            "session_id": session_id,
-            "timestamp": now
+            "response": final_message,
+            "visualization": visualization,
+            "timestamp": datetime.utcnow().isoformat(),
+            "user": g.current_user['email'],
+            "role": user_role
         })
+        
+    except Exception as e:
+        print(f"Error in chat endpoint: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 
     except Exception as e:
         print(f"Chat error: {e}")
@@ -1080,5 +1158,4 @@ if __name__ == '__main__':
     print(f"Azure AD Tenant: {AZURE_AD_TENANT_ID}")
     #app.run(debug=True, host='0.0.0.0', port=8000)
     
-
 
